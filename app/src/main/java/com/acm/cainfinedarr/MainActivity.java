@@ -1,8 +1,20 @@
+/*
+* Author: Codi Burley
+* Date Started: 1/31/2015
+*
+* Problem: Handicapped people have trouble finding lost canes
+*
+* Solution: An app that allows users to set a location, and then
+* find the location later on by following a beep that gets louder
+* as you get closer to the location
+ */
+
 package com.acm.cainfinedarr;
 
 import android.app.Activity;
+import android.content.res.AssetFileDescriptor;
 import android.location.Location;
-import android.location.LocationListener;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -14,7 +26,7 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 
-import java.text.BreakIterator;
+import java.io.IOException;
 import java.text.DateFormat;
 import java.util.Date;
 
@@ -25,12 +37,15 @@ public class MainActivity extends Activity implements GoogleApiClient.Connection
     GoogleApiClient mGoogleApiClient;
     private Location mCurrentLocation;
     private LocationRequest mLocationReq;
-    private boolean requestingLocationUpdates = false;
+    private boolean mRequestingLocationUpdates = false;
     private String mLastUpdateTime;
 
     private TextView mLatitudeText;
     private TextView mLongitudeText;
     private TextView mUpdateTime;
+
+    private MediaPlayer mPlayer;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,18 +70,37 @@ public class MainActivity extends Activity implements GoogleApiClient.Connection
         mLongitudeText = (TextView) findViewById(R.id.longitude_text);
         mUpdateTime = (TextView) findViewById(R.id.update_time);
 
+
+        initLocationRequest();
+        mRequestingLocationUpdates = true;
+
+        try {
+            initMPlayer();
+        } catch (IOException e) {
+            Toast t = Toast.makeText(this,"MediaPlayer: mp3 Asset Corrupted",Toast.LENGTH_LONG);
+            t.show();
+            e.printStackTrace();
+        }
+    }
+
+    protected void initLocationRequest() {
         mLocationReq = new LocationRequest();
-        setLocationRequestParameters(mLocationReq);
-        requestingLocationUpdates = true;
+        mLocationReq.setInterval(0); //update as fast as possible
+        mLocationReq.setFastestInterval(0);
+        mLocationReq.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
     }
 
-    protected void setLocationRequestParameters(LocationRequest req) {
-        req.setInterval(1000);
-        req.setInterval(100);
-        req.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+    /*throws io exception if the "beep" sound is not found in assets*/
+    protected void initMPlayer() throws IOException {
+        AssetFileDescriptor descriptor = getAssets().openFd("blind_beep.mp3");
+        mPlayer = new MediaPlayer();
+        mPlayer.setDataSource(descriptor.getFileDescriptor(),
+                              descriptor.getStartOffset(),
+                              descriptor.getLength());
+        mPlayer.prepareAsync(); //player starts everytime location updates
     }
 
-    /************** Implemented methods ****************************/
+    /*********** Implemented methods from API connection *****************/
     @Override
     public void onConnected(Bundle connectionHint) {
         Toast t = Toast.makeText(this,"onConnected ran", Toast.LENGTH_LONG);
@@ -77,10 +111,10 @@ public class MainActivity extends Activity implements GoogleApiClient.Connection
             mLatitudeText.setText(String.valueOf(mLastLocation.getLatitude()));
             mLongitudeText.setText(String.valueOf(mLastLocation.getLongitude()));
         }*/
-        if(requestingLocationUpdates) {
+        /*location updates should be running if API client connected*/
+        if(mRequestingLocationUpdates) {
             startLocationUpdates();
         }
-
     }
 
     @Override
@@ -95,6 +129,8 @@ public class MainActivity extends Activity implements GoogleApiClient.Connection
         t.show();
     }
 
+    /************* End Implemented Methods ******************************/
+
     protected void startLocationUpdates() {
         LocationServices.FusedLocationApi.requestLocationUpdates(
                 mGoogleApiClient, mLocationReq, this);
@@ -105,16 +141,14 @@ public class MainActivity extends Activity implements GoogleApiClient.Connection
         mCurrentLocation = location;
         mLastUpdateTime = DateFormat.getTimeInstance().format(new Date());
         updateUI();
+        mPlayer.start();
     }
 
     private void updateUI() {
         mLatitudeText.setText(String.valueOf(mCurrentLocation.getLatitude()));
         mLongitudeText.setText(String.valueOf(mCurrentLocation.getLongitude()));
         mUpdateTime.setText(mLastUpdateTime);
-
     }
-
-    /******* End Implemented Methods ******************************/
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
